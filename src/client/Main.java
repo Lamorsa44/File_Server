@@ -13,7 +13,7 @@ public class Main {
         Client client = new Client();
         String request;
         boolean on = true;
-        prepareDirectory("src/server/data");
+        prepareDirectory("src/client/data");
 
         while (on) {
             System.out.println("Enter action (1 - get a file, 2 - create a file, 3 - delete a file): ");

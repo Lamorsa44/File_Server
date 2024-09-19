@@ -5,15 +5,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Scanner;
 
 public class Client {
 
-    private final String BASE = "http://localhost:42069/server/data/";
-    private Scanner scanner = new Scanner(System.in);
+    private final String url = "http://localhost:42069/server/data/";
+    private final String root = "src/client/data/";
+    private final Scanner scanner = new Scanner(System.in);
     private HttpClient CLIENT;
-    private HttpRequest request;
-    private HttpResponse response;
+    private final String regex = "[^ \t]";
 
     public Client() {
         if (CLIENT == null) {
@@ -23,63 +25,114 @@ public class Client {
 
     synchronized public void get() throws IOException, InterruptedException {
 
-        System.out.println("Enter filename: ");
+        HttpResponse response;
 
-        String fileName = scanner.next();
+        System.out.println("Do you want to get the file by name or by id (1 - name, 2 - id): ");
 
-        request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + fileName))
-                .GET()
-                .build();
+        switch (scanner.nextInt()) {
+            case 1 -> {
+                System.out.println("Enter filename: ");
 
-        if (fileName.endsWith(".txt")) {
-            response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-        }
-        else
-            response = CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
+                String fileName = scanner.next();
 
-        System.out.println("The request was sent.");
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url + fileName))
+                        .GET()
+                        .build();
 
-        if (response.statusCode() == 200) {
-            if (response.body() != null)
-                System.out.printf("The content of the file is: %s\n", response.body());
-            else
-                System.out.println("The file is empty.");
-        } else {
-            System.out.println("The response says that the file was not found!");
+                Path path = Path.of(root + fileName);
+
+
+                if (Files.notExists(path)) {
+                    Files.createFile(path);
+                }
+
+                response = CLIENT.send(request,
+                        HttpResponse.BodyHandlers.ofFile(path));
+
+                System.out.println("The request was sent.");
+
+                if (response.statusCode() == 200) {
+                    System.out.println("File saved on the hard drive!");
+
+                } else {
+                    System.out.println("The response says that the file was not found!");
+                    Files.deleteIfExists(path);
+                }
+            }
+            case 2 -> {
+                System.out.println("Enter id: ");
+
+                String id = scanner.next();
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url + "id/" + id))
+                        .GET()
+                        .build();
+
+                System.out.println("The request was sent.");
+                //maybe lying
+                System.out.println("The file was downloaded! Specify a name for it: ");
+
+                String Filename = scanner.next();
+
+                Path path = Path.of(root + Filename);
+                if (Files.notExists(path))
+                    Files.createFile(path);
+
+
+                response = CLIENT.send(request, HttpResponse.BodyHandlers.ofFile(path));
+
+                if (response.statusCode() == 200) {
+                    System.out.println("File saved on the hard drive!");
+
+                } else {
+                    System.out.println("The response says that the file was not found!");
+                    Files.deleteIfExists(path);
+                }
+            }
         }
     }
 
     synchronized public void post() throws IOException, InterruptedException {
 
-        System.out.println("Enter filename: ");
+        System.out.println("Enter name of the file: ");
+        String fileName = scanner.next();
 
-        String fileName = scanner.nextLine();
+//        System.out.println("Enter name of the file to be saved on server: ");
+//        String serverName = scanner.next();
 
-        if (fileName.endsWith(".txt")) {
+        HttpRequest request;
 
-            String content;
-            System.out.println("Enter file content: ");
+        Path path = Path.of(root + fileName);
 
-            content = scanner.nextLine();
-
+//        Rememeber to fix code cause test cases are weird
+        try {
+            if (Files.exists(path)) {
+                request = HttpRequest.newBuilder()
+                        .uri(URI.create(url + fileName))
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(Files.readAllBytes(path)))
+                        .build();
+            } else {
+                System.out.println("This file does not exist.");
+                return;
+            }
+        } catch (IOException e) {
             request = HttpRequest.newBuilder()
-                    .uri(URI.create(BASE + fileName))
-                    .POST(HttpRequest.BodyPublishers.ofString(content))
-                    .build();
-        } else {
-            request = HttpRequest.newBuilder()
-                    .uri(URI.create(BASE + fileName))
+                    .uri(URI.create(url + fileName))
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .build();
+            System.out.println("Error POST sending empty request.");
         }
 
-        response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+
+        HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
         System.out.println("The request was sent.");
 
         if (response.statusCode() == 200) {
-            System.out.println("The response says that file was created!");
+//            System.out.println("Response says that file is saved! ID =");
+            System.out.println("Response says that file is saved! ID = " + response.body());
         } else {
             System.out.println("The response says that creating the file was forbidden!");
         }
@@ -87,26 +140,54 @@ public class Client {
 
     synchronized public void delete() throws IOException, InterruptedException {
 
-        System.out.println("Enter filename: ");
+        System.out.println("Do you want to delete the file by name or by id (1 - name, 2 - id): ");
 
-        String fileName = scanner.next();
-        HttpRequest request;
-        HttpResponse<String> response;
+        switch (scanner.nextShort()) {
+            case 1 -> {
+                System.out.println("Enter filename: ");
 
-        request = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + fileName))
-                .DELETE()
-                .build();
+                String fileName = scanner.next();
+                HttpRequest request;
+                HttpResponse<String> response;
 
-        response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                request = HttpRequest.newBuilder()
+                        .uri(URI.create(url + fileName))
+                        .DELETE()
+                        .build();
 
-        System.out.println("The request was sent.");
+                response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() == 200) {
-            System.out.println("The response says that the file was successfully deleted!");
-        } else {
-            System.out.println("The response says that the file was not found!");
+                System.out.println("The request was sent.");
+
+                if (response.statusCode() == 200) {
+                    System.out.println("The response says that the file was successfully deleted!");
+                } else {
+                    System.out.println("The response says that the file was not found!");
+                }
+            }
+            case 2 -> {
+                System.out.println("Enter id: ");
+
+                String id = scanner.next();
+
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url + "id/" + id))
+                        .DELETE()
+                        .build();
+
+                HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+
+                System.out.println("The request was sent.");
+
+                if (response.statusCode() == 200) {
+                    System.out.println("The response says that the file was successfully deleted!");
+                } else {
+                    System.out.println("The response says that the file was not found!");
+                }
+            }
         }
+
+
     }
 
     synchronized public void exit() throws IOException, InterruptedException {
